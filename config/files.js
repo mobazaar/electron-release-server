@@ -6,6 +6,10 @@ module.exports.files = {
   // Maximum allowed file size in bytes
   // Defaults to 500MB
   maxBytes: 524288000,
-  // The fs directory name at which files will be kept
-  dirname: ''
+  key: sails.config.files.key,
+  secret: sails.config.files.secret,
+  bucket: sails.config.files.bucket,
+  region: sails.config.files.region,
+  endpoint: undefined,
+  token: undefined
 };
