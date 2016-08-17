@@ -10,10 +10,12 @@ _Note: Despite being advertised as a release server for Electron applications, i
 
 If you host your project on your Github **and** do not need a UI for your app, then [Nuts](https://github.com/GitbookIO/nuts) is probably what you're looking for. Otherwise, you're in the same boat as I was, and you've found the right place!
 
+>IMPORTANT : This fork only stores your assets in *** AMAZON S3 *** 
+
 ## Features
 - :sparkles: Awesome release management interface powered by [AngularJS](https://angularjs.org)
     - Authenticates with LDAP, easy to modify to another authentication method if needed
-- :sparkles: Store assets on server disk, or Amazon S3 (with minor modifications)
+- :sparkles: Store assets ~~on server disk~~, only Amazon S3 
     - Use pretty much any database for persistence, thanks to [Sails](http://sailsjs.org) & [Waterline](http://waterlinejs.org)
 - :sparkles: Simple but powerful download urls (**NOTE:** when no assets are uploaded, server returns `404` by default):
     - `/download/latest`
