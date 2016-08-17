@@ -10,61 +10,38 @@ var path = require('path');
 var fsx = require('fs-extra');
 var crypto = require('crypto');
 var Promise = require('bluebird');
-
+var AWSService = require(path.resolve(__dirname, './AWSService.js'));
 var SkipperDisk = require('skipper-disk');
 
 var AssetService = {};
 
-AssetService.serveFile = function(req, res, asset) {
-  // Stream the file to the user
-  var fileStream = fsx.createReadStream(asset.fd)
-    .on('error', function(err) {
-      res.serverError('An error occurred while accessing asset.', err);
-      sails.log.error('Unable to access asset:', asset.fd);
-    })
-    .on('open', function() {
-      // Send file properties in header
-      res.setHeader(
-        'Content-Disposition', 'attachment; filename="' + asset.name + '"'
-      );
-      res.setHeader('Content-Length', asset.size);
-      res.setHeader('Content-Type', mime.lookup(asset.fd));
-    })
-    .on('end', function complete() {
-      // After we have sent the file, log analytics, failures experienced at
-      // this point should only be handled internally (do not use the res
-      // object).
-      //
-      // Atomically increment the download count for analytics purposes
-      //
-      // Warning: not all adapters support queries
-      if (_.isFunction(Asset.query)) {
-        Asset.query(
-          'UPDATE asset SET download_count = download_count + 1 WHERE name = \'' + asset.name + '\';',
-          function(err) {
-            if (err) {
-              sails.log.error(
-                'An error occurred while logging asset download', err
-              );
-            }
-          });
-      } else {
-        asset.download_count++;
+AssetService.serveFile = function (req, res, asset) {
+  if (_.isFunction(Asset.query)) {
+    Asset.query(
+      'UPDATE asset SET download_count = download_count + 1 WHERE name = \'' + asset.name + '\';',
+      function (err) {
+        if (err) {
+          sails.log.error(
+            'An error occurred while logging asset download', err
+          );
+        }
+      });
+  } else {
+    asset.download_count++;
 
-        Asset.update({
-            name: asset.name
-          }, asset)
-          .exec(function(err) {
-            if (err) {
-              sails.log.error(
-                'An error occurred while logging asset download', err
-              );
-            }
-          });
-      }
-    })
-    // Pipe to user
-    .pipe(res);
+    Asset.update({
+      name: asset.name
+    }, asset)
+      .exec(function (err) {
+        if (err) {
+          sails.log.error(
+            'An error occurred while logging asset download', err
+          );
+        }
+      });
+  }
+
+  res.redirect(307, asset.fd);
 };
 
 /**
@@ -72,17 +49,17 @@ AssetService.serveFile = function(req, res, asset) {
  * @param  {String} fd File descriptor of file to hash
  * @return {String}    Promise which is resolved with the hash once complete
  */
-AssetService.getHash = function(fd) {
-  return new Promise(function(resolve, reject) {
+AssetService.getHash = function (fd) {
+  return new Promise(function (resolve, reject) {
 
     var hash = crypto.createHash('sha1');
     hash.setEncoding('hex');
 
     var fileStream = fsx.createReadStream(fd)
-      .on('error', function(err) {
+      .on('error', function (err) {
         reject(err);
       })
-      .on('end', function() {
+      .on('end', function () {
         hash.end();
         resolve(String.prototype.toUpperCase.call(hash.read()));
       })
@@ -99,7 +76,7 @@ AssetService.getHash = function(fd) {
  * @param   {Object}  req   Optional: The request object
  * @returns {Promise}       Resolved once the asset is destroyed
  */
-AssetService.destroy = function(asset, req) {
+AssetService.destroy = function (asset, req) {
   if (!asset) {
     throw new Error('You must pass an asset');
   }
@@ -127,18 +104,25 @@ AssetService.destroy = function(asset, req) {
  * @param   {Object}  asset The asset object who's file we would like deleted
  * @returns {Promise}       Resolved once the file is deleted
  */
-AssetService.deleteFile = function(asset) {
+AssetService.deleteFile = function (asset) {
   if (!asset) {
     throw new Error('You must pass an asset');
   }
   if (!asset.fd) {
     throw new Error('The provided asset does not have a file descriptor');
   }
+  return new Promise((resolve, reject) => {
+    AWSService.delete(asset.version.name, asset.platform, asset.name, function (err) {
+      if(err){
+        return reject(err);
+      }
+      else
+      {
+        return resolve();
+      }
+    });
+  });
 
-  var fileAdapter = SkipperDisk();
-  var fileAdapterRmAsync = Promise.promisify(fileAdapter.rm);
-
-  return fileAdapterRmAsync(asset.fd);
 };
 
 module.exports = AssetService;
