@@ -25,6 +25,7 @@ AWSService.uploadFile = function (version, platform, file, callback) {
         }
         else {
             var s3URL = sails.config.aws.s3URL;
+            var bucket = sails.config.aws.bucket;
             fileURL = s3URL + '/' + bucket + '/' + key;
         }
         callback(err, fileURL);
