@@ -19,6 +19,9 @@ module.exports = {
 
   models: {
     connection: 'postgresql'
-  }
+  },
+
+  asset_service: 'LocalService',
+  // asset_service: 'AWSService'
 
 };

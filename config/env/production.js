@@ -40,4 +40,8 @@ module.exports = {
   //   secret: 'temppass'
   // }
 
+
+  // asset_service: 'LocalService',
+  asset_service: 'AWSService'
+
 };

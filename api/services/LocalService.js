@@ -1,11 +1,8 @@
 /**
- * AWS Service
+ * File Service
  *
- * Handles uploads & downloads of versions
+ * Handles uploads & downloads of versions locally
  */
-var AWS = require('aws-sdk');
-var fs = require('fs');
-var zlib = require('zlib');
 
 var mime = require('mime');
 var path = require('path');
@@ -13,14 +10,12 @@ var path = require('path');
 var fsx = require('fs-extra');
 var crypto = require('crypto');
 var Promise = require('bluebird');
+
 var SkipperDisk = require('skipper-disk');
 
-var AWSService = {};
+var AssetService = {};
 
-AWS.config.update({ accessKeyId: sails.config.aws.ak, secretAccessKey: sails.config.aws.sk, region: sails.config.aws.region });
-var s3 = new AWS.S3();
-
-AWSService.serveFile = function(req, res, asset) {
+AssetService.serveFile = function(req, res, asset) {
   // Stream the file to the user
   var fileStream = fsx.createReadStream(asset.fd)
     .on('error', function(err) {
@@ -77,7 +72,7 @@ AWSService.serveFile = function(req, res, asset) {
  * @param  {String} fd File descriptor of file to hash
  * @return {String}    Promise which is resolved with the hash once complete
  */
-AWSService.getHash = function(fd) {
+AssetService.getHash = function(fd) {
   return new Promise(function(resolve, reject) {
 
     var hash = crypto.createHash('sha1');
@@ -103,7 +98,7 @@ AWSService.getHash = function(fd) {
  * @param   {Object}  req   Optional: The request object
  * @returns {Promise}       Resolved once the asset is destroyed
  */
-AWSService.destroy = function(asset, req) {
+AssetService.destroy = function(asset, req) {
   if (!asset) {
     throw new Error('You must pass an asset');
   }
@@ -131,7 +126,7 @@ AWSService.destroy = function(asset, req) {
  * @param   {Object}  asset The asset object who's file we would like deleted
  * @returns {Promise}       Resolved once the file is deleted
  */
-AWSService.deleteFile = function(asset) {
+AssetService.deleteFile = function(asset) {
   if (!asset) {
     throw new Error('You must pass an asset');
   }
@@ -145,35 +140,4 @@ AWSService.deleteFile = function(asset) {
   return fileAdapterRmAsync(asset.fd);
 };
 
-AWSService.uploadFile = function (version, platform, file, callback) {
-
-    var body = fs.createReadStream(file.fd);
-    var key = platform + '/' + version + '/' + file.filename;
-    var params = { Bucket: sails.config.aws.bucket, Key: key, Body: body, ACL: 'public-read' };
-
-    s3.putObject(params, function (err, data) {
-        var fileURL = '';
-        var cf = sails.config.aws.cloudfrontURL;
-        if (cf != null) {
-            fileURL = cf + '/' + key;
-        }
-        else {
-            var s3URL = sails.config.aws.s3URL;
-            var bucket = sails.config.aws.bucket;
-            fileURL = s3URL + '/' + bucket + '/' + key;
-        }
-        callback(err, fileURL);
-    });
-};
-
-AWSService.delete = function (version, platform, filename, callback) {
-    var key = platform + '/' + version + '/' + filename;
-    var params = { Bucket: sails.config.aws.bucket, Key: key };
-
-    s3.deleteObject(params, function (err, data) {
-        callback(err);
-
-    });
-};
-
-module.exports = AWSService;
+module.exports = AssetService;
