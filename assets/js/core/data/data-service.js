@@ -579,10 +579,8 @@ angular.module('app.core.data.service', [
           return;
         }
 
-        var applicableChannels = self.availableChannels.slice(
-          0,
-          channelIndex + 1
-        );
+        // it should not try to find across environments
+        var applicableChannels = [channel];
 
         var versions = _
           .chain(self.data)
