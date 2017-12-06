@@ -77,49 +77,63 @@ module.exports = {
         filetype: filetype
       });
 
-      sails.log.debug('Asset requested with options', assetOptions);
+        sails.log.debug('Asset requested with options', assetOptions);
 
-      if (version || channel) {
-        Version
-          .find(UtilityService.getTruthyObject({
-            name: version,
-            channel: channel
-          }))
-          .sort({
-            createdAt: 'desc'
-          })
-          .limit(1)
-          .populate('assets', assetOptions)
-          .then(function (versions) {
-            if (!versions || !versions.length) {
-              return resolve();
-            }
+        if (version || channel) {
+          Version
+            .find(UtilityService.getTruthyObject({
+              name: version,
+              channel: channel
+            }))
+            .sort({
+              createdAt: 'desc'
+            })
+            // the latest version maybe has no assets, for example
+            // the moment between creating a version and uploading assets,
+            // so find more than 1 version and use the one containing assets.
+            .limit(10)
+            .populate('assets', assetOptions)
+            .then(function(versions) {
+              if (!versions || !versions.length) {
+                return resolve();
+              }
 
-            var version = versions[0];
+              // sort versions by `name` instead of `createdAt`,
+              // an lower version could be deleted then be created again,
+              // thus it has newer `createdAt`.
+              versions = versions.sort(UtilityService.compareVersion);
+              var version = versions[0];
+              var version;
+              for (var i = 0; i < versions.length; i++) {
+                version = versions[i];
+                if (version.assets && version.assets.length) {
+                  break;
+                }
+              }
 
-            if (!version.assets || !version.assets.length) {
-              return resolve();
-            }
+              if (!version.assets || !version.assets.length) {
+                return resolve();
+              }
 
-            // Sorting filename in ascending order prioritizes other files
-            // over zip archives is both are available and matched.
-            return resolve(_.orderBy(
-              version.assets, ['filetype', 'createdAt'], ['asc', 'desc']
-            )[0]);
-          })
-          .catch(reject);
-      } else {
-        Asset
-          .find(assetOptions)
-          .sort({
-            createdAt: 'desc'
-          })
-          .limit(1)
-          .then(resolve)
-          .catch(reject);
-      }
-    })
-      .then(function (asset) {
+              // Sorting filename in ascending order prioritizes other files
+              // over zip archives is both are available and matched.
+              return resolve(_.orderBy(
+                version.assets, ['filetype', 'createdAt'], ['asc', 'desc']
+              )[0]);
+            })
+            .catch(reject);
+        } else {
+          Asset
+            .find(assetOptions)
+            .sort({
+              createdAt: 'desc'
+            })
+            .limit(1)
+            .then(resolve)
+            .catch(reject);
+        }
+      })
+      .then(function(asset) {
         if (!asset || !asset.fd) {
           var noneFoundMessage = 'No download available';
 
@@ -196,13 +210,15 @@ module.exports = {
 
             var hashPromise;
 
-            if (fileExt === '.nupkg') {
-              // Calculate the hash of the file, as it is necessary for windows
-              // files
-              hashPromise = AssetService.getHash(uploadedFile.fd);
-            } else {
-              hashPromise = Promise.resolve('');
-            }
+        if (fileExt === '.nupkg') {
+          // Calculate the hash of the file, as it is necessary for windows
+          // files
+          hashPromise = AssetService.getHash(uploadedFile.fd);
+        } else if (fileExt === '.exe' || fileExt === '.zip') {
+          hashPromise = AssetService.getHash(uploadedFile.fd, 'sha256');
+        } else {
+          hashPromise = Promise.resolve('');
+        }
 
             hashPromise
               .then(function (fileHash) {

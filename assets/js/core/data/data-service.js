@@ -32,24 +32,12 @@ angular.module('app.core.data.service', [
       };
 
       self.filetypes = {
-        windows_64: '.exe',
-        windows_32: '.exe',
-        osx_64: '.dmg',
-        linux_64: '.deb',
-        linux_32: '.deb'
+        windows_64: ['.exe', '.msi'],
+        windows_32: ['.exe', '.msi'],
+        osx_64: ['.dmg', '.pkg', '.mas'],
+        linux_64: ['.deb', '.gz', '.rpm', '.AppImage'],
+        linux_32: ['.deb', '.gz', '.rpm', '.AppImage']
       };
-
-      /**
-       * An array of all available release channels
-       * TODO: Make this dynamic by fetching from the api
-       * @type {Array}
-       */
-      self.availableChannels = [
-        'stable',
-        'rc',
-        'beta',
-        'alpha'
-      ];
 
       /**
        * Compare version objects using semantic versioning.
@@ -535,32 +523,62 @@ angular.module('app.core.data.service', [
       });
 
       /**
-       * Retrieve & subscribe to all version & asset data.
+       * Retrieve & subscribe to all version, channels & asset data.
        * @return {Promise} Resolved once data has been retrieved
        */
       self.initialize = function() {
-        var deferred = $q.defer();
-        // Get the initial set of releases from the server.
-        // XXX This will also subscribe us to future changes regarding releases
-        $sails.get('/api/version')
-          .success(function(data) {
-            self.data = data;
-            self.sortVersions();
-            deferred.resolve(true);
+        self.currentPage = 0;
+        self.loading = true;
+        self.hasMore = false;
 
+        return Promise.all([
+            // Get the initial set of releases from the server.
+            // XXX This will also subscribe us to future changes regarding releases
+            $sails.get('/versions/sorted', {
+              page: self.currentPage
+            }),
+
+            // Get available channels
+            $sails.get('/api/channel'),
+
+            // Only sent to watch for asset updates
+            $sails.get('/api/asset')
+          ])
+          .then(function(responses) {
+            versions = responses[0];
+            channels = responses[1];
+            self.data = versions.data.items;
+            self.availableChannels = channels.data.map(function(channel) {
+              return channel.name;
+            });
+
+            self.currentPage++;
+            self.hasMore = versions.data.total > self.data.length;
+            self.loading = false;
             PubSub.publish('data-change');
-          })
-          .error(function(data, status) {
-            deferred.reject(data);
-          });
 
-        // Only sent to watch for asset updates
-        $sails.get('/api/asset')
-          .success(function(data) {
             $log.log('Should be subscribed!');
           });
+      };
 
-        return deferred.promise;
+      self.loadMoreVersions = function() {
+        if (self.loading) {
+          return;
+        }
+
+        self.loading = true;
+
+        return $sails.get('/versions/sorted', {
+          page: self.currentPage
+        })
+        .then(function(versions) {
+          self.data = self.data.concat(versions.data.items);
+
+          self.currentPage++;
+          self.hasMore = versions.data.total > self.data.length;
+          self.loading = false;
+          PubSub.publish('data-change');
+        });
       };
 
       /**
@@ -572,6 +590,9 @@ angular.module('app.core.data.service', [
        * @return {Object}          Latest release data object
        */
       self.getLatestReleases = function(platform, archs, channel) {
+        if (!self.availableChannels) {
+          return;
+        }
 
         var channelIndex = self.availableChannels.indexOf(channel);
 
@@ -595,16 +616,16 @@ angular.module('app.core.data.service', [
         _.forEach(archs, function(arch) {
           var platformName = platform + '_' + arch;
 
-          var filetype = self.filetypes[platformName];
+          var filetypes = self.filetypes[platformName];
 
-          if (!filetype) {
+          if (!filetypes) {
             return;
           }
           _.forEach(versions, function(version) {
             _.forEach(version.assets, function(asset) {
               if (
                 asset.platform === platformName &&
-                asset.filetype === filetype
+                filetypes.includes(asset.filetype)
               ) {
                 var matchedAsset = _.clone(asset);
                 matchedAsset.version = version.name;

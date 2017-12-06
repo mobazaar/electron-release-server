@@ -102,12 +102,15 @@
           ng-show="version.notes"
           ng-bind-html="version.notes"
           )
-        button.btn.btn-sm.btn-success(
+        button.btn.btn-sm.btn-success.download-btn(
           ng-repeat="asset in version.assets"
           ng-click="vm.download(asset, version.name)"
-          ng-if="asset.filetype === vm.filetypes[asset.platform]"
+          ng-if="vm.filetypes[asset.platform].includes(asset.filetype)"
           )
           | {{ vm.availablePlatforms[asset.platform] }}
+          | ({{ asset.filetype }})
+      .btn-group
+        a.btn.btn-default(ng-show="vm.showAllVersions && hasMoreVersions" ng-click="loadMoreVersions()") Load more versions
 
 iframe(
   style="display:none;"

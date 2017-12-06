@@ -9,6 +9,7 @@ var actionUtil = require('sails/lib/hooks/blueprints/actionUtil');
 var url = require('url');
 var Promise = require('bluebird');
 var semver = require('semver');
+var compareVersions = require('compare-versions');
 
 module.exports = {
 
@@ -28,6 +29,87 @@ module.exports = {
     }
 
     return res.redirect('/update/' + platform + '/' + version);
+  },
+
+  /**
+   * Sorts versions and returns pages sorted by by sermver
+   *
+   * ( GET /versions/sorted )
+   */
+  list: function (req, res) {
+    Version
+      .find()
+      .then(versions => {
+        var count = versions.length;
+        var page = req.param('page') || req.query.page || 0;
+        var start = page * sails.config.views.pageSize;
+        var end = start + sails.config.views.pageSize;
+        var items = versions
+          .sort(function (a, b) {
+            return -compareVersions(a.name, b.name);
+          })
+          .slice(start, end);
+
+        const response = {
+          total: count,
+          offset: start,
+          page: page,
+          items: items
+        }
+
+        return Promise.all([
+          // load channels
+          new Promise(function (resolve, reject) {
+            Promise.all(items.map(function (version) {
+              return Channel.findOne({
+                name: version.channel
+              })
+            }))
+            .then(resolve)
+            .catch(reject)
+          }),
+          // load assets
+          new Promise(function (resolve, reject) {
+            Promise.all(items.map(function (version) {
+              return Asset.find({
+                version: version.name
+              })
+            }))
+            .then(resolve)
+            .catch(reject)
+          })
+        ])
+        .then(function (results) {
+          response.items = response.items.map(function (item, index) {
+            return {
+              channel: results[0][index],
+              assets: results[1][index].map(function (asset) {
+                return {
+                  name: asset.name,
+                  platform: asset.platform,
+                  filetype: asset.filetype,
+                  hash: asset.hash,
+                  size: asset.size,
+                  download_count: asset.download_count,
+                  fd: asset.fd,
+                  createdAt: asset.createdAt,
+                  updatedAt: asset.updatedAt
+                }
+              }),
+              name: item.name,
+              notes: item.notes,
+              createdAt: item.createdAt,
+              updatedAt: item.updatedAt
+            }
+          })
+
+          return response
+        })
+      })
+      .then(response => {
+        res.send(response);
+      })
+      .catch(res.negotiate);
   },
 
   /**
@@ -221,7 +303,16 @@ module.exports = {
                 _.remove(newVersion.assets, function(o) {
                   return o.filetype !== '.nupkg' || !o.hash;
                 });
-                return newVersion.assets.length && semver.lte(
+
+                // Make sure the last version is a version with full asset
+                // so RELEASES contains at least one full asset (which is mandatory for Squirrel.Windows)
+                let v = _.filter(
+                    newVersion.assets,
+                    function(o) {
+                      return _.includes(o.name.toLowerCase(), '-full');
+                    }
+                  );
+                return v.length && semver.lte(
                   version, newVersion.name
                 );
               });
@@ -231,13 +322,34 @@ module.exports = {
               return res.status(500).send('Version not found');
             }
 
+            // Add Delta assets from other versions
+            var deltaAssets = _.reduce(
+              newerVersions,
+              function(assets, newVersion) {
+                return assets.concat(
+                  _.filter(
+                    newVersion.assets,
+                    function(asset) {
+                      return asset.filetype === '.nupkg'
+                        && _.includes(asset.name.toLowerCase(), '-delta')
+                        && semver.lte(version, asset.version)
+                        && semver.gt(latestVersion.name, asset.version);
+                    }));
+              }, []);
+
+            Array.prototype.unshift.apply(latestVersion.assets, deltaAssets);
+
+            latestVersion.assets.sort(function(a1, a2) {
+              return semver.compare(a1.version, a2.version);
+            });
+
             sails.log.debug('Latest Windows Version', latestVersion);
 
             // Change asset name to use full download link
             assets = _.map(latestVersion.assets, function(asset) {
               asset.name = url.resolve(
                 sails.config.appUrl,
-                '/download/' + latestVersion.name + '/' + asset.platform + '/' +
+                '/download/' + asset.version + '/' + asset.platform + '/' +
                 asset.name
               );
 
@@ -252,6 +364,150 @@ module.exports = {
           });
       })
       .catch(res.negotiate);
+  },
+
+  /**
+   * Get electron-updater win yml for a specific channel
+   * (GET /update/:platform/latest.yml)
+   * (GET /update/:platform/:channel.yml)
+   * (GET /update/:platform/:channel/latest.yml)
+   */
+  electronUpdaterWin: function(req, res) {
+    var platform = req.param('platform');
+    var channel = req.param('channel') || 'stable';
+
+    if (!platform) {
+      return res.badRequest('Requires `platform` parameter');
+    }
+
+    var platforms = PlatformService.detect(platform, true);
+
+    sails.log.debug('NSIS electron-updater Search Query', {
+      platform: platforms,
+      channel: channel
+    });
+
+    var applicableChannels = ChannelService.getApplicableChannels(channel);
+    sails.log.debug('Applicable Channels', applicableChannels);
+
+    // Get latest version that has a windows asset
+    Version
+      .find({ channel: applicableChannels })
+      .populate('assets')
+      .then(function(versions) {
+        // TODO: Implement method to get latest version with available asset
+        var sortedVersions = versions.sort(UtilityService.compareVersion);
+        var latestVersion = null;
+        var asset = null;
+        for (var i = 0; i < sortedVersions.length; i++) {
+          var currentVersion = sortedVersions[i];
+          if (currentVersion.assets) {
+            for (var j = 0; j < currentVersion.assets.length; j++) {
+              var currentAsset = currentVersion.assets[j];
+              if (currentAsset.filetype === '.exe' && _.includes(platforms, currentAsset.platform)) {
+                latestVersion = currentVersion;
+                asset = currentAsset;
+                break;
+              }
+            }
+
+            if (latestVersion) {
+              break;
+            }
+          }
+        }
+
+        if (latestVersion) {
+          var downloadPath = url.resolve(
+            //sails.config.appUrl,
+            "",
+            '/download/' + latestVersion.name + '/' + asset.platform + '/' +
+            asset.name
+          );
+
+          var sha2 = asset.hash ? asset.hash.toLowerCase() : null
+
+          var latestYml = "version: " + latestVersion.name
+                          + "\nreleaseDate: " + latestVersion.updatedAt
+                          + "\npath: " + downloadPath
+                          + "\nsha2: " + sha2;
+          res.ok(latestYml);
+        } else {
+          res.notFound();
+        }
+      });
+  },
+
+  /**
+   * Get electron-updater mac yml for a specific channel
+   * (GET /update/:platform/latest-mac.yml)
+   * (GET /update/:platform/:channel-mac.yml)
+   * (GET /update/:platform/:channel/latest-mac.yml)
+   */
+  electronUpdaterMac: function(req, res) {
+    var platform = req.param('platform');
+    var channel = req.param('channel') || 'stable';
+
+    if (!platform) {
+      return res.badRequest('Requires `platform` parameter');
+    }
+
+    var platforms = PlatformService.detect(platform, true);
+
+    sails.log.debug('Mac electron-updater Search Query', {
+      platform: platforms,
+      channel: channel
+    });
+
+    var applicableChannels = ChannelService.getApplicableChannels(channel);
+    sails.log.debug('Applicable Channels', applicableChannels);
+
+    // Get latest version that has a mac asset
+    Version
+      .find({ channel: applicableChannels })
+      .populate('assets')
+      .then(function(versions) {
+        // TODO: Implement method to get latest version with available asset
+        var sortedVersions = versions.sort(UtilityService.compareVersion);
+        var latestVersion = null;
+        var asset = null;
+        for (var i = 0; i < sortedVersions.length; i++) {
+          var currentVersion = sortedVersions[i];
+          if (currentVersion.assets) {
+            for (var j = 0; j < currentVersion.assets.length; j++) {
+              var currentAsset = currentVersion.assets[j];
+              if (currentAsset.filetype === '.zip' && _.includes(platforms, currentAsset.platform)) {
+                latestVersion = currentVersion;
+                asset = currentAsset;
+                break;
+              }
+            }
+
+            if (latestVersion) {
+              break;
+            }
+          }
+        }
+
+        if (latestVersion) {
+          var downloadPath = url.resolve(
+            //sails.config.appUrl,
+            "",
+            '/download/' + latestVersion.name + '/' + asset.platform + '/' +
+            asset.name
+          );
+
+          var sha2 = asset.hash ? asset.hash.toLowerCase() : null
+
+          var latestYml = "version: " + latestVersion.name
+                          + "\nreleaseDate: " + latestVersion.updatedAt
+                          + "\npath: " + downloadPath
+                          + "\nsha2: " + sha2;
+          res.ok(latestYml);
+        } else {
+          res.notFound();
+        }
+      });
   },
 
   /**
