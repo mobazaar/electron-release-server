@@ -5,9 +5,11 @@
   "description": "A version server for hosting and serving the your electron desktop app releases.",
   "dependencies": {
     "async": "^2.5.0",
+    "aws-sdk": "^2.5.1",
     "bluebird": "^3.4.6",
     "bower": "^1.8.0",
     "compare-versions": "^3.1.0",
+    "cos-nodejs-sdk-v5": "^2.4.10",
     "express-useragent": "^1.0.4",
     "fs-extra": "^1.0.0",
     "grunt": "^1.0.1",
@@ -41,8 +43,7 @@
     "semver": "^5.3.0",
     "skipper-disk": "^0.5.4",
     "strip-bom": "^3.0.0",
-    "url": "^0.11.0",
-    "aws-sdk":"^2.5.1"
+    "url": "^0.11.0"
   },
   "scripts": {
     "debug": "node debug app.js",
