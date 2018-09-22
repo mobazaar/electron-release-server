@@ -42,6 +42,6 @@ module.exports = {
 
 
   // asset_service: 'LocalService',
-  asset_service: 'AWSService'
+  asset_service: 'CosService'
 
 };

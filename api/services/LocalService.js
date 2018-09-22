@@ -13,9 +13,9 @@ var Promise = require('bluebird');
 
 var SkipperDisk = require('skipper-disk');
 
-var AssetService = {};
+var LocalService = {};
 
-AssetService.serveFile = function(req, res, asset) {
+LocalService.serveFile = function(req, res, asset) {
   // Stream the file to the user
   var fileStream = fsx.createReadStream(asset.fd)
     .on('error', function(err) {
@@ -72,7 +72,7 @@ AssetService.serveFile = function(req, res, asset) {
  * @param  {String} fd File descriptor of file to hash
  * @return {String}    Promise which is resolved with the hash once complete
  */
-AssetService.getHash = function(fd, type = 'sha1') {
+LocalService.getHash = function(fd, type = 'sha1') {
   return new Promise(function(resolve, reject) {
 
     var hash = crypto.createHash(type);
@@ -98,7 +98,7 @@ AssetService.getHash = function(fd, type = 'sha1') {
  * @param   {Object}  req   Optional: The request object
  * @returns {Promise}       Resolved once the asset is destroyed
  */
-AssetService.destroy = function(asset, req) {
+LocalService.destroy = function(asset, req) {
   if (!asset) {
     throw new Error('You must pass an asset');
   }
@@ -126,7 +126,7 @@ AssetService.destroy = function(asset, req) {
  * @param   {Object}  asset The asset object who's file we would like deleted
  * @returns {Promise}       Resolved once the file is deleted
  */
-AssetService.deleteFile = function(asset) {
+LocalService.deleteFile = function(asset) {
   if (!asset) {
     throw new Error('You must pass an asset');
   }
@@ -140,4 +140,4 @@ AssetService.deleteFile = function(asset) {
   return fileAdapterRmAsync(asset.fd);
 };
 
-module.exports = AssetService;
+module.exports = LocalService;

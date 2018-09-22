@@ -9,7 +9,10 @@ var _ = require('lodash');
 var path = require('path');
 var actionUtil = require('sails/lib/hooks/blueprints/actionUtil');
 var Promise = require('bluebird');
-var AWSService = require('../services/AWSService');
+var uploadService = require('../services/AWSService');
+if (sails.config.asset_service.toUpperCase() == "CosService".toUpperCase()) {
+  var uploadService = require('../services/CosService');
+}
 
 var SEGMENTS_TO_REMOVE = _.concat(_.pickBy(PlatformService, _.isString), [
   'x64',
@@ -201,7 +204,7 @@ module.exports = {
 
         var fileExt = path.extname(uploadedFile.filename);
 
-        AWSService.uploadFile(data.version.name, data.platform, uploadedFile, function (err,fileURL) {
+        uploadService.uploadFile(data.version.name, data.platform, uploadedFile, function (err,fileURL) {
           if (err) {
             return res.badRequest(err);
           }

@@ -4,21 +4,18 @@
  * Delegates uploads & downloads of versions
  */
 
-var path = require('path');
-var crypto = require('crypto');
+var localService = require('./LocalService')
 
 var AssetService = {};
 
-var delegateService = require(path.resolve(__dirname, './'+sails.config.asset_service+'.js'));
-
-AssetService.serveFile = delegateService.serveFile;
+AssetService.serveFile = localService.serveFile;
 
 /**
  * Asyncronously generates a SHA1 hash from a file
  * @param  {String} fd File descriptor of file to hash
  * @return {String}    Promise which is resolved with the hash once complete
  */
-AssetService.getHash = delegateService.getHash;
+AssetService.getHash = localService.getHash;
 
 /**
  * Deletes an asset from the database.
@@ -27,7 +24,7 @@ AssetService.getHash = delegateService.getHash;
  * @param   {Object}  req   Optional: The request object
  * @returns {Promise}       Resolved once the asset is destroyed
  */
-AssetService.destroy = delegateService.destroy;
+AssetService.destroy = localService.destroy;
 
 /**
  * Deletes an asset's file from the filesystem.
@@ -35,6 +32,6 @@ AssetService.destroy = delegateService.destroy;
  * @param   {Object}  asset The asset object who's file we would like deleted
  * @returns {Promise}       Resolved once the file is deleted
  */
-AssetService.deleteFile = delegateService.deleteFile;
+AssetService.deleteFile = localService.deleteFile;
 
 module.exports = AssetService;
