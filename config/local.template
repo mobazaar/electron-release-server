@@ -100,7 +100,7 @@ module.exports = {
     bucket : "your_cos_bucket",
     region : "your_cos_region",
     secretId : "your_cos_secret_id",
-    SecretKey : "your_cos_secret_key"
+    secretKey : "your_cos_secret_key"
   },
   /***************************************************************************
    * Your SSL certificate and key, if you want to be able to serve HTTP      *

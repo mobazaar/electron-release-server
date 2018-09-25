@@ -8,8 +8,8 @@ var Cos = require('cos-nodejs-sdk-v5');
 var CosService = {};
 
 var cos = new Cos({
-    SecretId: sails.config.cos.SecretId,
-    SecretKey: sails.config.cos.SecretKey,
+    SecretId: sails.config.cos.secretId,
+    SecretKey: sails.config.cos.secretKey,
 });
 
 CosService.uploadFile = function (version, platform, file, callback) {
@@ -21,7 +21,11 @@ CosService.uploadFile = function (version, platform, file, callback) {
         Key: key,
         FilePath: file.fd
     }, function (err, data) {
-        callback(err, data.Location);
+        if (err) {
+            callback(err, "");
+        } else {
+            callback(err, data.Location);
+        }
     });
 };
 
